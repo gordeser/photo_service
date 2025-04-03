@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    restart: always
+    container_name: photo_service_database
+    environment:
+      - POSTGRES_USER=photo_service
+      - POSTGRES_PASSWORD=photo_service
+      - POSTGRES_DB=photo_service
+    ports:
+      - "5432:5432"
+    networks:
+      - photo_service_network
+
+  elastic-service:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.7.1
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - SPRING_ELASTICSEARCH_USERNAME=photo_service
+      - SPRING_ELASTICSEARCH_PASSWORD=photo_service
+    ports:
+      - "9200:9200"
+    networks:
+      - photo_service_network
+    restart: always
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9200" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  photo_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - RUNNING_IN_DOCKER=true
+      - SPRING_PROFILES_ACTIVE=local
+    container_name: photo_service
+    ports:
+      - "8082:8080"
+    depends_on:
+      postgres:
+        condition: service_started
+      elastic-service:
+        condition: service_healthy
+    networks:
+      - photo_service_network
+    env_file:
+      - .env
+
+networks:
+  photo_service_network:
+    driver: bridge

@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    restart: always
+    container_name: photo_service_database
+    environment:
+      - POSTGRES_USER=photo_service
+      - POSTGRES_PASSWORD=photo_service
+      - POSTGRES_DB=photo_service
+    ports:
+      - "5432:5432"
+    networks:
+      - photo_service_local_network
+
+  elastic-service:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.7.1
+    restart: always
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    networks:
+      - photo_service_local_network
+
+networks:
+  photo_service_local_network:
+    driver: bridge
