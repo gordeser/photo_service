@@ -1,8 +1,7 @@
 package org.gordeser.backend.service;
 
-import com.cloudinary.Cloudinary;
-import com.cloudinary.utils.ObjectUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.gordeser.backend.entity.Image;
 import org.gordeser.backend.entity.Post;
@@ -12,10 +11,13 @@ import org.gordeser.backend.messages.LogMessages;
 import org.gordeser.backend.repository.ImageRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.util.StringUtils;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Service class for managing images.
@@ -37,9 +39,9 @@ public class ImageService {
     private final ImageRepository imageRepository;
 
     /**
-     * Cloudinary client for uploading and managing images in Cloudinary.
+     * AWS service for uploading images in AWS S3.
      */
-    private final Cloudinary cloudinary;
+    private final AwsService awsService;
 
     /**
      * Retrieves all images from the database.
@@ -71,34 +73,33 @@ public class ImageService {
     }
 
     /**
-     * Creates a new image by uploading it to Cloudinary.
+     * Creates a new image by uploading it to AWS S3.
      *
      * @param file the file to upload and create an image from
      * @return the created {@link Image} entity
      * @throws EmptyFile if an error occurs during file upload or the file is empty
      */
-    @SuppressWarnings("unchecked")
-    public Image createImage(final MultipartFile file) throws EmptyFile {
+    @SneakyThrows(IOException.class)
+    public Image createImage(MultipartFile file) throws EmptyFile {
         if (file.isEmpty()) {
             log.error(LogMessages.FILE_EMPTY_ERROR.getMessage());
             throw new EmptyFile();
         }
 
-        try {
-            Map<String, Object> uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.emptyMap());
-            log.info(LogMessages.IMAGE_CREATION_ATTEMPT.getMessage(), file.getOriginalFilename());
-            Image image = new Image();
-            image.setFile(uploadResult.get("url").toString());
+        String fileName = StringUtils.cleanPath(Objects.requireNonNull(file.getOriginalFilename()));
+        String contentType = file.getContentType();
+        Long fileSize = file.getSize();
+        InputStream inputStream = file.getInputStream();
 
-            Image savedImage = imageRepository.save(image);
-            log.info(LogMessages.IMAGE_CREATED_SUCCESS.getMessage(), savedImage.getId());
+        log.info(LogMessages.IMAGE_CREATION_ATTEMPT.getMessage(), file.getOriginalFilename());
+        String uploadedFileUrl = awsService.uploadFile(fileName, fileSize, contentType, inputStream);
 
-            return savedImage;
-        } catch (IOException ex) {
-            log.info(ex.getMessage());
-        }
+        Image image = new Image();
+        image.setFile(uploadedFileUrl);
+        Image savedImage = imageRepository.save(image);
+        log.info(LogMessages.IMAGE_CREATED_SUCCESS.getMessage(), savedImage.getId());
 
-        return null;
+        return savedImage;
     }
 
     /**
