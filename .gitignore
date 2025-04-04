@@ -77,4 +77,4 @@ local.properties
 
 #files
 python_request.py
-elastic_search_insert.txt
+archive/
